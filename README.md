@@ -22,6 +22,7 @@ Both events support targeting VRAM bank 0 or bank 1 on CGB hardware, making them
 4. [Technicalities and Restrictions](#technicalities-and-restrictions)
 5. [Events Reference](#events-reference)
 6. [Inner Workings](#inner-workings)
+7. [Memory Footprint](#memory-footprint)
 
 ---
 
@@ -215,3 +216,18 @@ _stackPushScriptValue(input.tile_length);    // FN_ARG0 (last pushed = top of st
 ```
 
 The GBVM calling convention numbers arguments from the top of the stack downward, so `FN_ARG0` is the most-recently-pushed value.
+
+---
+
+## Memory Footprint
+
+Measured against the stock GB Studio **4.3.0-e1** engine (per-file SDCC compile with GB Studio's build flags, default engine settings). Values are the plugin's *delta* versus the stock engine; DMG build, with CGB noted where it differs. ROM cost lands in banked ROM (GB Studio's autobanker spreads it across switchable banks); using the plugin's events additionally compiles a few bytes of GBVM script per call into your project's script banks.
+
+| | Cost |
+|---|---|
+| WRAM | +0 bytes |
+| ROM | +140 bytes (DMG) / +131 bytes (CGB) |
+
+- **WRAM:** no change.
+- **Engine WRAM headroom:** the stock GB Studio 4.3.0 engine leaves about **854 bytes** of WRAM free (usable engine WRAM is 7,776 bytes at 0xC0A0–0xDF00; the stock engine uses 6,922 bytes). With this plugin installed roughly **854 bytes** remain. This figure does not depend on how many global variables your project defines: the script memory array has a fixed size of VM_HEAP_SIZE + (VM_MAX_CONTEXTS × VM_CONTEXT_STACK_SIZE) words — 768 + 16 × 64 = 1,792 words (3,584 bytes) with stock engine settings.
+- **SRAM:** not used.
