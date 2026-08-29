@@ -1,10 +1,14 @@
 # gbs-replaceTilesetTilesPlugin
 
-**Version 4.3.0 — Requires GB Studio ≥ 4.3.0**
+**Version 4.3.0. Requires GB Studio 4.3.0 or newer.**
 
-A GB Studio engine plugin that exposes tile-level VRAM writes to scripts. It adds two events for replacing a range of background tile bitmaps in VRAM directly from a tileset asset — one that picks the tileset at build time, and an extended version that takes the tileset as a runtime pointer, so scripts can choose the source tileset dynamically.
+Lets a script overwrite background tile graphics while the game runs, copying tiles straight out of
+a tileset in your project. Use it for animated water, a day and night palette of tiles, a wall that
+changes when it takes damage, or seasonal art on the same map.
 
-Both events can target VRAM bank 0 or bank 1 on Game Boy Color hardware.
+Two events. One picks the source tileset when the project is built. The other takes the tileset
+from variables, so a script can choose which art to load. Both can write to either tile bank on
+Game Boy Color.
 
 ![image](https://github.com/user-attachments/assets/4400d11b-e663-4163-b840-da48ab1783ee)
 
@@ -18,30 +22,35 @@ Both events can target VRAM bank 0 or bank 1 on Game Boy Color hardware.
 2. [Project Setup](#project-setup)
 3. [Size Limits and Restrictions](#size-limits-and-restrictions)
 4. [Events Reference](#events-reference)
-5. [Memory Footprint](#memory-footprint)
-6. [Bank 0 (HOME) Usage](#bank-0-home-usage)
-7. [Changelog](#changelog)
+5. [FAQ](#faq)
+6. [Memory Footprint](#memory-footprint)
+7. [Bank 0 (HOME) Usage](#bank-0-home-usage)
+8. [Changelog](#changelog)
 
 ---
 
 ## Concepts
 
-### Background VRAM tile slots
+### Background tile slots
 
-The Game Boy stores background tile bitmaps in VRAM as 256 numbered slots (indices 0–255), with a second set of 256 slots in VRAM bank 1 on Game Boy Color. The tilemap references those slots by index, so changing the bitmap at a given slot instantly changes **every** on-screen tile that uses that index.
+The Game Boy holds background tile graphics in 256 numbered slots, plus a second set of 256 on
+Game Boy Color. The scene's background map refers to those slots by number, so changing the art in
+one slot changes every tile on screen that uses it, all at once.
 
-### Replace vs. reload
+### What this changes
 
-This plugin writes new bitmap data into existing VRAM slots. It does not change the tilemap — only the pixels stored at the target slots. That is useful for:
+These events write new art into slots that already exist. The background map is untouched, so
+whatever was drawn stays where it was and only its appearance changes. One write can turn every
+water tile in the scene into the next frame of an animation.
 
-- swapping tile graphics at runtime without a scene change: animated tiles, day/night, damage states;
-- loading tile variants from different tilesets into the same VRAM slots so the existing tilemap keeps working.
+### Choosing the tileset at build time or while running
 
-### Build-time vs. runtime tileset selection
+**Replace Tileset Tiles** takes the source tileset from your project's asset list when the project
+is built. The target slot and the source offset can still vary while the game runs.
 
-**Replace Tileset Tiles** picks the source tileset from the project's asset list when the project is built. Only the target VRAM index and the source offset can vary at runtime.
-
-**Replace Tileset Tiles Ex** takes the tileset as a runtime pointer — the bank number and address can come from script variables — so scripts can choose which tileset to use based on game state. It requires the caller to already know the bank and pointer of the desired tileset, which normally come from another plugin event that returns them.
+**Replace Tileset Tiles Ex** takes the tileset location from variables, so a script can decide which
+art to load based on what is happening in the game. The caller has to know the tileset's location,
+which normally comes from another plugin's event that reports it.
 
 <img width="537" height="841" alt="image" src="https://github.com/user-attachments/assets/b1005f4c-b45d-429d-9c3f-a52ab5e97ab3" />
 
@@ -49,96 +58,139 @@ This plugin writes new bitmap data into existing VRAM slots. It does not change 
 
 ## Project Setup
 
-1. Copy the plugin folder into your GB Studio project's `plugins/` directory. No additional configuration, engine fields, or compatibility variants are required.
+1. Copy the plugin folder into your project's `plugins` folder. There is nothing to configure.
 
 ### Using Replace Tileset Tiles
 
 1. Add a **Replace Tileset Tiles** event to any script.
-2. Select the source **Tileset** asset.
-3. Set **Target Tile Index** — the VRAM slot where writing starts (0–255). On Game Boy Color, add 2048 (`0x0800`) to target VRAM bank 1 instead of bank 0.
-4. Set **Source Offset Tile Index** — the first tile within the tileset to read from; 0 starts at the beginning.
-5. Set **Length** — the number of consecutive tiles to copy.
+2. Pick the source **Tileset**.
+3. Set **Target Tile Index**, the slot where writing starts, from 0 to 255. On Game Boy Color add
+   2048 to write into the second tile bank.
+4. Set **Source Offset Tile Index**, the first tile to read from the tileset. 0 is its first tile.
+5. Set **Length**, how many tiles in a row to copy.
 
 ### Using Replace Tileset Tiles Ex
 
-1. Before calling the event, store the tileset's bank number and pointer in two script variables.
-2. Add a **Replace Tileset Tiles Ex** event and set **Tileset bank** and **Tileset Pointer** to those variables.
-3. Set **Target Tile Index**, **Source Offset Tile Index** and **Length** — all of which can be variables or expressions here.
+1. Put the tileset's bank and address into two variables first.
+2. Add a **Replace Tileset Tiles Ex** event and point **Tileset bank** and **Tileset Pointer** at
+   those variables.
+3. Set **Target Tile Index**, **Source Offset Tile Index** and **Length**. All three accept
+   variables and expressions here.
 
 ---
 
 ## Size Limits and Restrictions
 
-### Background VRAM only
+### Background tiles only
 
-Both events write to background VRAM. Sprite (actor and projectile) tiles are not affected.
+Both events write background tiles. Actor and projectile sprites are unaffected.
 
 ### Length is fixed in the standard event
 
-In **Replace Tileset Tiles**, **Length** is a constant chosen when the project is built. In **Replace Tileset Tiles Ex** it is a runtime value and can come from a variable.
+**Replace Tileset Tiles** takes a constant **Length**, chosen when the project is built. In
+**Replace Tileset Tiles Ex** it can come from a variable.
 
-### Selecting the VRAM bank on Game Boy Color
+### Picking the tile bank on Game Boy Color
 
-Add 2048 (`0x0800`) to the target tile index to write into VRAM bank 1; without it, writes go to bank 0. The low 8 bits are the slot number within the chosen bank. On DMG hardware the extra bit is ignored and all writes go to the single VRAM bank.
+Add 2048 to the target tile index to write into the second bank. Without it, writes go to the
+first. The remaining part of the number is the slot within that bank. On original Game Boy hardware
+the extra amount is ignored.
 
-### Source offset is a tile index, not a byte offset
+### Source offset counts tiles
 
-**Source Offset Tile Index** counts tiles: index 0 is the first tile in the tileset, index 1 the second, and so on.
+**Source Offset Tile Index** counts tiles, so 0 is the first tile in the tileset, 1 the second, and
+so on.
 
-### The source tileset must have enough tiles
+### The source tileset must be long enough
 
-There is no bounds checking. If the offset plus the length exceeds the number of tiles in the tileset, the read runs past the end of the data and produces garbage graphics.
+Nothing checks the range. When the offset plus the length runs past the end of the tileset, the
+copy reads whatever follows it in the ROM and you get scrambled tiles.
 
-### Changes persist until overwritten or the scene changes
+### Changes last until something overwrites them
 
-Written tile data stays in VRAM until a scene change reloads all tile data from ROM, or another write replaces the same slots. Saving and loading does not preserve VRAM tile data — reapply any runtime replacements after a load.
+Written tiles stay until a scene change reloads everything from the ROM, or another write covers
+the same slots. Saving does not record tile graphics, so reapply your changes after a load.
 
-### No engine files modified
+### No engine files are replaced
 
-The plugin only adds a new engine source file, so it has no compatibility conflicts with other engine plugins.
+The plugin adds a new engine file and changes none of the existing ones, so it has no conflicts
+with other engine plugins.
 
 ---
 
 ## Events Reference
 
-Both events appear under **Scene → Tiles** in the script editor.
-
----
+Both events appear under **Scene**, in the **Tiles** section.
 
 ### Replace Tileset Tiles
 
-**`EVENT_REPLACE_TILESET_TILES`**
-
-Replaces a contiguous range of background VRAM tile slots with pixel data from a project tileset asset.
+Overwrites a run of background tile slots with art from a tileset in your project.
 
 | Field | Description |
 |---|---|
-| Tileset | The source tileset to read tile bitmaps from, chosen when the project is built. |
-| Target Tile Index | VRAM slot index where the write starts (0–255). Add 2048 to target VRAM bank 1 on Game Boy Color. |
-| Source Offset Tile Index | First tile within the tileset to copy; 0 is the beginning of the tileset. |
-| Length | Number of consecutive tiles to copy. A constant, not a variable. |
-
----
+| Tileset | The source tileset, chosen when the project is built. |
+| Target Tile Index | Slot where writing starts, 0 to 255. Add 2048 for the second tile bank on Game Boy Color. |
+| Source Offset Tile Index | First tile to copy from the tileset. 0 is its first tile. |
+| Length | How many tiles in a row to copy. A constant. |
 
 ### Replace Tileset Tiles Ex
 
-**`EVENT_REPLACE_TILESET_TILES_EX`**
-
-Extended variant that takes the source tileset as a runtime pointer, so every parameter — including the tile count — can be a variable or expression.
+The same job with the source tileset given by variables, so every field can be a variable or
+expression, including the tile count.
 
 | Field | Description |
 |---|---|
-| Tileset bank | ROM bank number of the tileset. |
-| Tileset Pointer | Memory address of the tileset. |
-| Target Tile Index | VRAM slot index where the write starts (0–255). Add 2048 to target VRAM bank 1 on Game Boy Color. |
-| Source Offset Tile Index | First tile within the tileset to copy. |
-| Length | Number of consecutive tiles to copy. |
+| Tileset bank | ROM bank holding the tileset. |
+| Tileset Pointer | Address of the tileset. |
+| Target Tile Index | Slot where writing starts, 0 to 255. Add 2048 for the second tile bank on Game Boy Color. |
+| Source Offset Tile Index | First tile to copy from the tileset. |
+| Length | How many tiles in a row to copy. |
+
+---
+
+## FAQ
+
+**How do I animate water without metatiles?**
+Draw the animation frames as consecutive tiles in one tileset. Then run a loop that calls
+**Replace Tileset Tiles** with a different **Source Offset Tile Index** each time, writing over the
+water slots. Every water tile on screen changes together.
+
+**How do I find the target tile index for a specific tile?**
+Open the scene's tileset and count from the first tile, starting at 0. Watch out for repeats:
+GB Studio drops duplicate tiles when it builds, which shifts the slots after them.
+
+**My tiles turned into noise. What happened?**
+The copy read past the end of the source tileset. Check that **Source Offset Tile Index** plus
+**Length** stays inside the tileset's tile count.
+
+**My changes disappeared after a scene change.**
+That is expected. A scene change reloads all tile art from the ROM. Reapply the change in the new
+scene's **On Init**, or in a render script from the TileRenderEvent plugin.
+
+**My changes disappeared after loading a save.**
+Saves do not record tile graphics. Reapply any changes after a load.
+
+**Can I change one tile on the map without affecting others?**
+No. These events change the art in a slot, so every tile using that slot changes. To alter a single
+position, use **Set Background Tile** to point that position at a different slot.
+
+**Does it work on Game Boy Color?**
+Yes. Add 2048 to the target index to write into the second tile bank.
+
+**What is Replace Tileset Tiles Ex for?**
+Choosing the source art while the game runs. It needs the tileset's location in variables, which
+another plugin event has to supply, so use the standard event unless you specifically need that.
+
+**Does it interfere with other plugins?**
+No. It adds a new engine file and replaces none of the stock ones.
 
 ---
 
 ## Memory Footprint
 
-Measured against the stock GB Studio **4.3.0-e1** engine by `measure_plugin_memory.js` (per-file SDCC compile with GB Studio's own build flags, at default engine settings; report of 2026-08-13). Figures are this plugin's *delta* versus stock — a file that replaces a stock engine file counts only the difference, which is why a plugin can come out negative. Using the plugin's events additionally compiles a few bytes of GBVM script per call into your project's script banks, on top of the fixed cost below.
+Measured against the stock GB Studio **4.3.0-e1** engine at default engine settings, report of
+2026-08-13. Figures are the difference against a stock project. Each event you use also compiles a
+few bytes of script into your project, on top of the fixed cost below.
 
 | Budget | Cost |
 |---|---|
@@ -146,10 +198,13 @@ Measured against the stock GB Studio **4.3.0-e1** engine by `measure_plugin_memo
 | WRAM | 0 bytes |
 | Banked ROM | +140 bytes |
 
-- **Bank 0:** nothing. Every function the plugin adds is compiled into a switchable ROM bank.
+- **Bank 0:** nothing. Everything the plugin adds is compiled into a switchable ROM bank.
 - **WRAM:** no change.
-- **Banked ROM:** 140 bytes for the tile replacement helper.
-- **Engine WRAM headroom:** a stock GB Studio 4.3.0 project leaves about **854 bytes** of WRAM free (usable engine WRAM is 7,776 bytes at 0xC0A0–0xDF00; the stock engine uses 6,922). With this plugin installed roughly **854 bytes** remain. That does not change with the number of global variables your project defines: the script memory array is a fixed 3,584 bytes at stock engine settings (VM_HEAP_SIZE + VM_MAX_CONTEXTS × VM_CONTEXT_STACK_SIZE = 768 + 16 × 64 words).
+- **Banked ROM:** 140 bytes for the copying code.
+- **Engine WRAM headroom:** a stock GB Studio 4.3.0 project leaves about **854 bytes** of WRAM
+  free (the engine has 7,776 bytes to work with and uses 6,922 of them). With this plugin
+  installed roughly **854 bytes** remain. Adding more global variables to your project does not
+  change that figure, because script memory is a fixed 3,584 byte block at stock engine settings.
 - **SRAM:** not used.
 
 ---
@@ -157,17 +212,16 @@ Measured against the stock GB Studio **4.3.0-e1** engine by `measure_plugin_memo
 <!-- BANK0:BEGIN -->
 ## Bank 0 (HOME) Usage
 
-Bank 0 is the 16 KB non-switchable ROM bank that the GB Studio engine core,
-the interrupt handlers and the GBDK runtime all share. Banked ROM is cheap
-(add another bank), bank 0 is not, so it is usually the first thing a project
-runs out of.
+Bank 0 is the 16 KB fixed ROM bank shared by the GB Studio engine core, the
+interrupt handlers and the GBDK runtime. Extra banked ROM is cheap to add,
+bank 0 is not, so bank 0 is usually the first thing a project runs out of.
 
 | | Bytes |
 |---|---|
 | Bank 0 used by this plugin | **0** |
 
-**This plugin costs nothing in bank 0.** Every one of its functions is compiled
-into a switchable ROM bank; nothing it adds is resident in bank 0.
+**This plugin costs nothing in bank 0.** Everything it adds is compiled into a
+switchable ROM bank.
 <!-- BANK0:END -->
 
 ## Changelog
@@ -175,14 +229,14 @@ into a switchable ROM bank; nothing it adds is resident in bank 0.
 Grouped by the date each change was merged into the official
 [gb-studio-plugins](https://github.com/gb-studio-dev/gb-studio-plugins) repository.
 
-Only bug fixes, new features and feature changes are listed. Engine version
-bumps, patch regeneration, packaging fixes and documentation edits are omitted.
+Only bug fixes, new features and feature changes are listed. Engine version bumps, patch
+regeneration, packaging fixes and documentation edits are omitted.
 
 ### 2026-02-03
 
-- New `replaceTilesetTilesEx` event, allowing the tileset far pointer to be passed through variables.
+- Added **Replace Tileset Tiles Ex**, which takes the tileset location from variables.
 
 ### 2025-04-23
 
 - Initial release.
-- Refactored to use the GBVM replace-tiles command.
+- Reworked to use the built-in tile replacement command.
